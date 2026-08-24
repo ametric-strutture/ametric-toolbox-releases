@@ -1,0 +1,43 @@
+# Fotografa ogni giorno il contatore dei download degli asset delle release e lo
+# appende a download-history.csv.
+#
+# Serve perche' GitHub espone solo il totale cumulativo (`download_count`) e lo
+# sovrascrive: non esiste API ne' pagina che mostri lo storico. Se non lo si salva
+# qui, il dato di ieri e' perso per sempre.
+name: Snapshot download count
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # ogni giorno alle 06:00 UTC
+  workflow_dispatch: # avvio manuale dalla tab Actions
+
+permissions:
+  contents: write
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Legge i contatori e appende la riga di oggi
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          today=$(date -u +%F)
+          if [ ! -f download-history.csv ]; then
+            echo "date,tag,asset,downloads" > download-history.csv
+          fi
+          gh api "repos/${{ github.repository }}/releases" --paginate \
+            --jq '.[] | .tag_name as $tag | .assets[] | [$tag, .name, .download_count] | @csv' \
+            | sed "s/^/$today,/" >> download-history.csv
+
+      - name: Commit
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add download-history.csv
+          git diff --quiet --cached || git commit -m "Download count $(date -u +%F)"
+          git push
