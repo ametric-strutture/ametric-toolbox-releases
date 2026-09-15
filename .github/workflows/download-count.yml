@@ -1,9 +1,15 @@
-# Fotografa ogni giorno il contatore dei download degli asset delle release e lo
-# appende a download-history.csv.
+# Fotografa ogni giorno quanti download ha avuto l'installer, in tutto, e scrive una
+# riga in download-history.csv: data, totale, nuovi del giorno.
 #
-# Serve perche' GitHub espone solo il totale cumulativo (`download_count`) e lo
-# sovrascrive: non esiste API ne' pagina che mostri lo storico. Se non lo si salva
-# qui, il dato di ieri e' perso per sempre.
+# Serve perche' GitHub espone solo il contatore cumulativo del singolo asset di una
+# singola release (`download_count`), lo sovrascrive e non ne tiene storia: il dato di
+# ieri, se non lo si salva qui, e' perso per sempre. Sommare gli asset omonimi di tutte
+# le release da il totale del prodotto, che nessuna pagina di GitHub mostra: alla
+# pubblicazione di una versione nuova il suo contatore riparte da zero mentre quello
+# della precedente resta fermo al valore raggiunto.
+#
+# Si contano solo gli asset AMetric_toolbox_setup.exe: .sha256 e .sig sono verifiche
+# dell'installer, non download del programma.
 name: Snapshot download count
 
 on:
@@ -20,18 +26,37 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Legge i contatori e appende la riga di oggi
+      - name: Legge i contatori e scrive la riga di oggi
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           today=$(date -u +%F)
-          if [ ! -f download-history.csv ]; then
-            echo "date,tag,asset,downloads" > download-history.csv
-          fi
-          gh api "repos/${{ github.repository }}/releases" --paginate \
-            --jq '.[] | .tag_name as $tag | .assets[] | [$tag, .name, .download_count] | @csv' \
-            | sed "s/^/$today,/" >> download-history.csv
+
+          # select(.draft | not): una release ancora in bozza ha i contatori a zero e
+          # non c'entra col totale di quanto e' stato scaricato davvero.
+          totale=$(gh api "repos/${{ github.repository }}/releases" --paginate \
+            --jq '[.[] | select(.draft | not) | .assets[]
+                   | select(.name == "AMetric_toolbox_setup.exe") | .download_count] | add // 0')
+
+          [ -f download-history.csv ] || echo "data,totale,nuovi" > download-history.csv
+
+          # Una sola riga per giorno: un avvio manuale ripetuto riscrive quella di oggi
+          # invece di aggiungerne una seconda.
+          grep -v "^$today," download-history.csv > .download-history.tmp || true
+          mv .download-history.tmp download-history.csv
+
+          # "nuovi" e' la differenza dall'ultima riga rimasta, cioe' dal giorno prima.
+          # Resta vuoto se c'e' solo l'intestazione, perche' li' il pregresso non si sa.
+          # Se una release venisse eliminata il suo contatore sparirebbe dal totale e
+          # "nuovi" sarebbe negativo per un giorno: cambia la fotografia, non i download.
+          precedente=$(tail -n 1 download-history.csv | cut -d, -f2)
+          case "$precedente" in
+            '' | *[!0-9]*) nuovi="" ;;
+            *) nuovi=$((totale - precedente)) ;;
+          esac
+
+          echo "$today,$totale,$nuovi" >> download-history.csv
 
       - name: Commit
         run: |
