@@ -8,7 +8,9 @@ Windows 10/11 (64 bit):
 - Sezioni rettangolari in c.a.
 - Coordinamento attività
 - Isolatori sismici HDRB — modulo a pagamento
-- Sezioni generiche in c.a. (beta) — modulo a pagamento
+- Sezioni generiche in c.a. — modulo a pagamento
+- Analisi statica lineare, un foglio Excel (serve Microsoft Excel per
+  Windows) — modulo a pagamento
 
 I primi quattro sono gratuiti per sempre. Al primo avvio si attiva con la
 propria e-mail una prova gratuita di 30 giorni, che sblocca anche i moduli a

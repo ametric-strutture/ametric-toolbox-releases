@@ -10,6 +10,12 @@
 #
 # Si contano solo gli asset AMetric_toolbox_setup.exe: .sha256 e .sig sono verifiche
 # dell'installer, non download del programma.
+#
+# Il totale non scende mai (12/11/2026): download-releases.json tiene l'ultimo
+# conteggio visto per ogni release, e una release cancellata resta li' col suo valore.
+# Prima il totale era la somma delle sole release presenti, e quando fra il 17 e il
+# 18/10/2026 sono state cancellate le release 1.0-1.2.1 e' sceso da 229 a 7: quei 229
+# stanno in "eliminati_prima" e lo storico del CSV e' stato corretto dal 18/10.
 name: Snapshot download count
 
 on:
@@ -35,9 +41,19 @@ jobs:
 
           # select(.draft | not): una release ancora in bozza ha i contatori a zero e
           # non c'entra col totale di quanto e' stato scaricato davvero.
-          totale=$(gh api "repos/${{ github.repository }}/releases" --paginate \
-            --jq '[.[] | select(.draft | not) | .assets[]
-                   | select(.name == "AMetric_toolbox_setup.exe") | .download_count] | add // 0')
+          correnti=$(gh api "repos/${{ github.repository }}/releases" --paginate \
+            --jq '.[] | select(.draft | not)
+                  | {(.tag_name): ([.assets[] | select(.name == "AMetric_toolbox_setup.exe")
+                                    | .download_count] | add // 0)}' | jq -s 'add // {}')
+
+          # Per ogni release il valore piu' alto mai visto; le release sparite restano.
+          [ -f download-releases.json ] || echo '{"eliminati_prima":0,"rilasci":{}}' > download-releases.json
+          jq --argjson c "$correnti" '
+            .rilasci as $r
+            | .rilasci = ($r + ($c | with_entries(.value = ([.value, ($r[.key] // 0)] | max))))
+          ' download-releases.json > .download-releases.tmp
+          mv .download-releases.tmp download-releases.json
+          totale=$(jq '(.eliminati_prima // 0) + ([.rilasci[]] | add // 0)' download-releases.json)
 
           [ -f download-history.csv ] || echo "data,totale,nuovi" > download-history.csv
 
@@ -63,6 +79,6 @@ jobs:
           set -euo pipefail
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add download-history.csv
+          git add download-history.csv download-releases.json
           git diff --quiet --cached || git commit -m "Download count $(date -u +%F)"
           git push
