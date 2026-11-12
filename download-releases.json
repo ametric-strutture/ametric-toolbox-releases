@@ -1,5 +1,9 @@
 {
   "nota": "Ultimo conteggio visto per ogni release (solo AMetric_toolbox_setup.exe). Una release cancellata resta qui col suo ultimo valore, cosi' il totale non scende. 'eliminati_prima' sono le release 1.0-1.2.1, cancellate fra il 17 e il 18/10/2026, prima che questo file esistesse: 229 e' il totale del 17/10.",
   "eliminati_prima": 229,
-  "rilasci": {}
+  "rilasci": {
+    "v1.5": 3,
+    "v1.4": 56,
+    "v1.3": 37
+  }
 }
